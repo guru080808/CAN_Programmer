@@ -30,7 +30,7 @@ class APP_Setup:
             ports_list.append(port)
         self.MainUI.verbosity_box.addItems([str(i) for i in range(4)])
         self.MainUI.Bitrate_box.addItems([str(i) for i in range(1,5)])
-        self.MainUI.addItems([str(i) for i in range(0,256)])
+        self.MainUI.pageno_box.addItems([str(i) for i in range(0,256)])
         self.MainUI.PORT_list.addItems(ports_list)
         self.MainUI.Setport_btn.clicked.connect(self.BUTTON_RequestSetComPort)
         self.MainUI.RequestOTA_btn.clicked.connect(self.BUTTON_RequestOta)
@@ -75,7 +75,7 @@ class APP_Setup:
         self.APP_ShowLogs("OTA Request Initated")
         whiletimeout=time.time()
         if self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_500_0):
-            while time.time()-whiletimeout<5:
+            while time.time()-whiletimeout<10:
                 if self.canprogrammer.CAN_ProgrammerInitiliseOTAReequest(CMD=CMD_OTA_REQUEST,DATA=DATA_OTA_REQUEST):
                     self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_125_0)
                     break
@@ -109,7 +109,7 @@ class APP_Setup:
             return
         FILESIZE=os.path.getsize(FILENAME)
         PagesToClear=int((FILESIZE)/2048) + (1 if (FILESIZE)%2048!=0 else 0)
-
+        flashTime=time.time()
         if self.canprogrammer.CAN_ProgrammerSectorErase(addr=ADDR,no_of_sectors= PagesToClear):
             self.APP_ShowLogs(f"{hex(ADDR)}-{hex(ADDR+FILESIZE)} Erased. Flashing Now...")
             if self.canprogrammer.CAN_ProgrammerWriteMemory(filepath=FILENAME,addr=ADDR):
@@ -138,12 +138,20 @@ class APP_Setup:
         else:
             self.APP_ShowLogs(f"Unable to Erase")
             self.APP_SetProgress(FAIL)
-                  
+        flashTime=time.time()-flashTime
+        self.APP_ShowLogs(f"Time took to flash:{flashTime}")         
         return 
 
     def BUTTON_RequestErase(self):
         if self.MainUI.MassErase_chkbox.isChecked():
             self.canprogrammer.CAN_ProgrammerFullChipErase()
+        else:
+            page_no=int(self.MainUI.pageno_box.currentText())
+            ADDR=int(0x08000000)+(page_no*2048)
+            print("Erasing page no:",page_no, hex(ADDR))
+            if self.canprogrammer.CAN_ProgrammerSectorErase(addr=ADDR,no_of_sectors= 1):
+                self.APP_ShowLogs(f"{hex(ADDR)} Erased.")
+
         return 
 
     def BUTTON_RequestChooseFile(self):
@@ -164,13 +172,13 @@ class APP_Setup:
         else:
             self.APP_ShowLogs(f"Connection to port:{port} failed")
         
-        if self.canprogrammer.CAN_ProgrammerInitiliseOTAReequest(CMD=CMD_OTA_REQUEST,DATA=DATA_OTA_REQUEST):
-            if self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_125_0):
-                if self.canprogrammer.CAN_ProgrammerInitiliseBootloader():
-                    self.MainUI.BootVer_op.clear()
-                    self.MainUI.PID_op.clear()
-                    self.MainUI.PID_op.append(self.canprogrammer.CAN_ProgrammerGetID())
-                    self.MainUI.BootVer_op.append(self.canprogrammer.CAN_ProgrammerGetVersion())
+        # if self.canprogrammer.CAN_ProgrammerInitiliseOTAReequest(CMD=CMD_OTA_REQUEST,DATA=DATA_OTA_REQUEST):
+        #     if self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_125_0):
+        #         if self.canprogrammer.CAN_ProgrammerInitiliseBootloader():
+        #             self.MainUI.BootVer_op.clear()
+        #             self.MainUI.PID_op.clear()
+        #             self.MainUI.PID_op.append(self.canprogrammer.CAN_ProgrammerGetID())
+        #             self.MainUI.BootVer_op.append(self.canprogrammer.CAN_ProgrammerGetVersion())
         return 
 
     def BUTTON_RequestSetBitRate(self):
