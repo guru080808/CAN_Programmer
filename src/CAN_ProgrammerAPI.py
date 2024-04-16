@@ -7,7 +7,7 @@ from util.CAN_Macro import *
 
 
 class CAN_Programmer:
-    def __init__(self,APP_Object=None, debug_level=0,APP_Enable=0) -> None:
+    def __init__(self,APP_Object=None, debug_level=1,APP_Enable=0) -> None:
         '''
         channel=COMx
 
@@ -16,7 +16,7 @@ class CAN_Programmer:
         self.AppEnable=APP_Enable
         self.AppObject=APP_Object
         f = open(
-            "C:/GURU/vecmocon/VIM/ivec-application/Scripts/CAN_Programmer/CANProgrammer.log", 'w')
+            "./CANProgrammer.log", 'w')
         f.close()
         
 
@@ -24,6 +24,7 @@ class CAN_Programmer:
         retCode=0
         try:
             self.__canBus = can.interface.Bus(bustype='serial', channel=channel)
+            self.__canBus.flush_tx_buffer()
             retCode=1
             self.MODULE_DEBUG(f'{channel} connected',DEBUG_LVL_1)
         except Exception as e:
@@ -49,7 +50,7 @@ class CAN_Programmer:
                 self.AppObject.APP_ShowLogs(f'{time.time()}:-{data_to_print}')
 
         if data_log:
-            with open("C:/GURU/vecmocon/VIM/ivec-application/Scripts/CAN_Programmer/CANProgrammer.log", 'a') as logfile:
+            with open("./CANProgrammer.log", 'a') as logfile:
                 logfile.write(f"\n{time.time()}--{data_to_print}")
         return
 
@@ -127,7 +128,7 @@ class CAN_Programmer:
         self.MODULE_DEBUG('Getting Product ID',DEBUG_LVL_1)
         if self.CAN_ProgrammerSendCmd(CMD=CMD_GET_ID) and self.CAN_ProgrammerWaitForAck(CMD=CMD_GET_ID) == BOOTLOADER_OK:
             data_dict = self.CAN_ProgrammerPollForCMDData(
-                timeout=0.5, CMD=CMD_GET_ID)
+                timeout=15, CMD=CMD_GET_ID)
             if data_dict['total_bytes'] and data_dict['data'][-1] == CMD_ACK:
                 temp = data_dict['data'][0:data_dict['total_bytes']-1]
                 dev_ID = hex(int.from_bytes(temp, 'big', signed=False))
@@ -140,7 +141,7 @@ class CAN_Programmer:
         self.MODULE_DEBUG('Getting Bootloader Version',DEBUG_LVL_1)
         if self.CAN_ProgrammerSendCmd(CMD=CMD_GET_VERSION) and self.CAN_ProgrammerWaitForAck(CMD=CMD_GET_VERSION) == BOOTLOADER_OK:
             data_dict = self.CAN_ProgrammerPollForCMDData(
-                timeout=0.5, CMD=CMD_GET_VERSION)
+                timeout=15, CMD=CMD_GET_VERSION)
             if data_dict['total_bytes'] and data_dict['data'][-1] == CMD_ACK:
                 temp = hex(data_dict['data'][0])
                 dev_VER = temp
@@ -154,8 +155,11 @@ class CAN_Programmer:
         '''
         time.sleep(wait)
         retCode = 0
+        
+        t_start=time.time()
+
         self.MODULE_DEBUG("Connecting with ST Bootloader",DEBUG_LVL_1)
-        if self.CAN_ProgrammerSendCmd(CMD=CMD_ACK) and self.CAN_ProgrammerWaitForAck(CMD=CMD_ACK) == BOOTLOADER_OK:
+        if self.CAN_ProgrammerSendCmd(CMD=0x79) and self.CAN_ProgrammerWaitForAck(CMD=CMD_ACK) == BOOTLOADER_OK:
             self.MODULE_DEBUG("Connected.Device is ready to recieve commands",DEBUG_LVL_1)
             retCode = 1
         else:
@@ -186,7 +190,16 @@ class CAN_Programmer:
             else:
                 self.MODULE_DEBUG("ACK Not Recived",DEBUG_LVL_1)
         return 0
-
+    def CAN_ProgrammerChangeBaudRateType2(self, BAUDRATE):
+        if self.CAN_ProgrammerSendCmd(CMD=CMD_BAUDRATE, data=[1, DATA_BAUDRATE_125_1,BAUDRATE]):
+            self.MODULE_DEBUG(
+                "BAUDRATE Change Request Sent. Waiting for ACK...",DEBUG_LVL_1)
+            if self.CAN_ProgrammerWaitForAck(CMD=CMD_BAUDRATE):
+                self.MODULE_DEBUG("ACK Recived",DEBUG_LVL_1)
+                return 1
+            else:
+                self.MODULE_DEBUG("ACK Not Recived",DEBUG_LVL_1)
+        return 0
     def CAN_ProgrammerFullChipErase(self):
         if self.CAN_ProgrammerSendCmd(CMD=CMD_ERASE, data=[0xff]):
             self.MODULE_DEBUG("Starting CHIP Erase. Waiting for ACK...",DEBUG_LVL_1)
@@ -245,6 +258,9 @@ class CAN_Programmer:
                 TotalRequest = int(Totalen/256) + \
                     (0 if Totalen % 256 == 0 else 1)
                 for i in range(TotalRequest):
+                    print(i)
+                    if i==141:
+                        pass
                     ADDR = bytearray(addr.to_bytes(4, 'big'))
                     ADDR.append(0)
                     if TempLen > 256:
@@ -261,14 +277,14 @@ class CAN_Programmer:
                         SentLen = 0
                         while TempLen:
                             if SentLen >= TempLen or SentLen >= 256:
-                                if not self.CAN_ProgrammerWaitForAck(CMD=CMD_WRITEMEMORY):
+                                if not self.CAN_ProgrammerWaitForAck(CMD=CMD_WRITEMEMORY,delay=1000):
                                     print(
                                         f"ACK Not Received Sentlen:{SentLen}  Request:{i} out of {TotalRequest}   ADDR:{ADDR}",DEBUG_LVL_2)
                                     return 0
                                 else:
                                     TempLen -= 256
                                     break
-                            if self.CAN_ProgrammerSendCmd(CMD=0x04, data=bindata[256*i+SentLen:256*i+SentLen+8]) and self.CAN_ProgrammerWaitForAck(CMD=CMD_WRITEMEMORY):
+                            if self.CAN_ProgrammerSendCmd(CMD=0x04, data=bindata[256*i+SentLen:256*i+SentLen+8]) and self.CAN_ProgrammerWaitForAck(CMD=CMD_WRITEMEMORY,delay=1000):
                                 SentLen += 8
                             else:
                                 print(

@@ -5,14 +5,14 @@ from UI.CAN_ProgrammerUI import Ui_MainWindow
 import time,os
 import sys,serial.tools.list_ports
 from src.CAN_ProgrammerAPI import CAN_Programmer
-from util.CAN_Macro import CMD_OTA_REQUEST,DATA_OTA_REQUEST,DATA_BAUDRATE_125_0,DATA_BAUDRATE_500_0,PASS,FAIL
+from util.CAN_Macro import CMD_OTA_REQUEST,DATA_OTA_REQUEST,DATA_BAUDRATE_125_0,DATA_BAUDRATE_500_0,PASS,FAIL,DATA_BAUDRATE_250_0,CMD_ACK
 
 
 
 
 class APP_Setup:
     def __init__(self,AppEnable=False) -> None:
-        self.canprogrammer=CAN_Programmer(APP_Object=self,APP_Enable=AppEnable, debug_level=0)
+        self.canprogrammer=CAN_Programmer(APP_Object=self,APP_Enable=AppEnable, debug_level=3)
         self.MainUI = Ui_MainWindow()
         self.setup()
         self.App_Run()
@@ -74,10 +74,10 @@ class APP_Setup:
     def BUTTON_RequestOta(self):
         self.APP_ShowLogs("OTA Request Initated")
         whiletimeout=time.time()
-        if self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_500_0):
+        if self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_250_0):
             while time.time()-whiletimeout<10:
-                if self.canprogrammer.CAN_ProgrammerInitiliseOTAReequest(CMD=CMD_OTA_REQUEST,DATA=DATA_OTA_REQUEST):
-                    self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_125_0)
+                if self.canprogrammer.CAN_ProgrammerInitiliseOTAReequest(CMD=CMD_ACK,DATA=DATA_OTA_REQUEST):
+                    # self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_125_0)
                     break
                 time.sleep(0.100)
 
@@ -110,10 +110,12 @@ class APP_Setup:
         FILESIZE=os.path.getsize(FILENAME)
         PagesToClear=int((FILESIZE)/2048) + (1 if (FILESIZE)%2048!=0 else 0)
         flashTime=time.time()
-        if self.canprogrammer.CAN_ProgrammerSectorErase(addr=ADDR,no_of_sectors= PagesToClear):
+        if 1 or self.canprogrammer.CAN_ProgrammerSectorErase(addr=ADDR,no_of_sectors= PagesToClear):
             self.APP_ShowLogs(f"{hex(ADDR)}-{hex(ADDR+FILESIZE)} Erased. Flashing Now...")
             if self.canprogrammer.CAN_ProgrammerWriteMemory(filepath=FILENAME,addr=ADDR):
                 self.APP_ShowLogs(f"Succesfully flashed...")
+                self.canprogrammer.CAN_ProgrammerJumpToAddress(0x08007000)
+                exit()
                 if self.MainUI.verify_chkbox.isChecked():
                     self.APP_ShowLogs(f"Verifying Now...")
                     READ_BUF=self.canprogrammer.CAN_ProgrammerReadMemory(addr=ADDR,no_of_bytes=FILESIZE)
@@ -173,7 +175,7 @@ class APP_Setup:
             self.APP_ShowLogs(f"Connection to port:{port} failed")
         
         # if self.canprogrammer.CAN_ProgrammerInitiliseOTAReequest(CMD=CMD_OTA_REQUEST,DATA=DATA_OTA_REQUEST):
-        #     if self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_125_0):
+        self.canprogrammer.CAN_ProgrammerChangeBaudRate(BAUDRATE=DATA_BAUDRATE_250_0)
         #         if self.canprogrammer.CAN_ProgrammerInitiliseBootloader():
         #             self.MainUI.BootVer_op.clear()
         #             self.MainUI.PID_op.clear()
